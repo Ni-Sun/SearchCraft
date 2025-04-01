@@ -1,4 +1,6 @@
-*/
+parsers/
+*crawler/
 .idea
 __pycache__
 blocked_ips.txt
+configs.py

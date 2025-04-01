@@ -10,17 +10,24 @@ import random
 # 配置多个爬虫任务
 CRAWLER_CONFIGS = [
     {
-        'name': 'baidu',
-        'homepage': 'https://www.baidu.com',
-        'max_pages': 10,
-        'threads': 4
-    },
-    {
-        'name': 'zhihu',
-        'homepage': 'https://www.zhihu.com',
-        'max_pages': 10,
-        'threads': 4
+        'name': 'cnblogs',
+        'homepage': 'https://www.cnblogs.com/',
+        'max_pages': 10,  # 控制爬取数量
+        'threads': 4,
+        'delay': (1, 3)  # 自定义延迟范围
     }
+    # {
+    #     'name': 'baidu',
+    #     'homepage': 'https://www.baidu.com',
+    #     'max_pages': 10,
+    #     'threads': 4
+    # },
+    # {
+    #     'name': 'zhihu',
+    #     'homepage': 'https://www.zhihu.com',
+    #     'max_pages': 10,
+    #     'threads': 4
+    # }
 ]
 
 
@@ -110,13 +117,21 @@ if __name__ == '__main__':
         master.start()
         masters.append(master)
 
-    # 保持主线程运行
-    while any(m.spider.crawled_count < m.spider.max_pages for m in masters):
-        time.sleep(10)
-        print("\n=== Current Status ===")
-        for m in masters:
-            print(f"{m.config['name']}: {m.spider.crawled_count} pages")
-
+    try:
+        # 保持主线程运行
+        while any(m.spider.crawled_count < m.spider.max_pages for m in masters):
+            time.sleep(10)
+            print("\n=== Current Status ===")
+            for m in masters:
+                print(f"{m.config['name']}: {m.spider.crawled_count} pages")
+    finally:
+        # 所有任务完成后执行清理
+        print("\n=== Starting cleanup ===")
+        for config in CRAWLER_CONFIGS:
+            project_name = f"{config['name']}-crawler"
+            clean_small_files(project_name)
+            print(f"Cleanup completed for {project_name}")
+        print("=== All cleanup operations completed ===")
 
 
 
