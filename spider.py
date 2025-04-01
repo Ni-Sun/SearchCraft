@@ -75,16 +75,9 @@ class Spider:
         # 写入文件 xxx_org.txt
         filepath = os.path.join(download_dir, filename)
         try:
-            with open(filepath, 'w') as f:
+            with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(content)
             print(f'Saved: {filename}')
-            if os.path.exists(download_dir):
-                # 统计≥1KB的文件数量
-                self.crawled_count = sum(
-                    1 for filename in os.listdir(download_dir)
-                    if os.path.isfile(os.path.join(download_dir, filename))
-                    and os.path.getsize(os.path.join(download_dir, filename)) >= 1024
-                )
         except Exception as e:
             print(f'Save failed: {filename} - {str(e)}')
 
@@ -99,10 +92,18 @@ class Spider:
             processed_filename = filename.replace('_org.txt', '_c.txt')
             processed_path = os.path.join(download_dir, processed_filename)
 
-            with open(processed_path, 'w') as f:
+            with open(processed_path, 'w', encoding='utf-8') as f:
                 f.write(processed)
         except Exception as e:
             print(f'Save failed: {processed_filename} - {str(e)}')
+
+        if os.path.exists(download_dir):
+            # 统计≥1KB的文件数量
+            self.crawled_count = sum(
+                1 for filename in os.listdir(download_dir)
+                if os.path.isfile(os.path.join(download_dir, filename))
+                and os.path.getsize(os.path.join(download_dir, filename)) >= 1024
+            )
 
     # Creates directory and files for project on first run and starts the spider
     def boot(self):

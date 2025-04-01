@@ -12,29 +12,47 @@ CRAWLER_CONFIGS = [
     {
         'name': 'cnblogs',
         'homepage': 'https://www.cnblogs.com/',
-        'max_pages': 10,  # 控制爬取数量
+        'max_pages': 200,  # 控制爬取数量
         'threads': 4,
         'delay': (1, 3)  # 自定义延迟范围
-    }
-    # {
-    #     'name': 'baidu',
-    #     'homepage': 'https://www.baidu.com',
-    #     'max_pages': 10,
-    #     'threads': 4
-    # },
-    # {
-    #     'name': 'zhihu',
-    #     'homepage': 'https://www.zhihu.com',
-    #     'max_pages': 10,
-    #     'threads': 4
-    # }
+    },
+    {
+        'name': 'baidu',
+        'homepage': 'https://www.baidu.com',
+        'max_pages': 200,
+        'threads': 4
+    },
+    {
+        'name': 'weather_china',    # 中国天气网
+        'homepage': 'http://www.weather.com.cn',
+        'max_pages': 200,
+        'threads': 4
+    },
+    {
+        'name': 'lianjia',      # 链家
+        'homepage': 'https://www.lianjia.com',
+        'max_pages': 200,
+        'threads': 4
+    },
+    {
+        'name': 'bilibili',     # 哔哩哔哩
+        'homepage': 'https://www.bilibili.com',
+        'max_pages': 200,
+        'threads': 4
+    },
+    {
+        'name': 'sina_news',     # 新浪
+        'homepage': 'https://news.sina.com.cn',
+        'max_pages': 200,
+        'threads': 4
+    },
 ]
 
 
 class CrawlerMaster:
     def __init__(self, config):
         self.config = config
-        self.project_name = f"{config['name']}-crawler"
+        self.project_name = f"crawler/{config['name']}-crawler"
         self.domain_name = get_domain_name(config['homepage'])
         self.spider = Spider(
             self.project_name,
@@ -128,7 +146,7 @@ if __name__ == '__main__':
         # 所有任务完成后执行清理
         print("\n=== Starting cleanup ===")
         for config in CRAWLER_CONFIGS:
-            project_name = f"{config['name']}-crawler"
+            project_name = f"crawler/{config['name']}-crawler"
             clean_small_files(project_name)
             print(f"Cleanup completed for {project_name}")
         print("=== All cleanup operations completed ===")

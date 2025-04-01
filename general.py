@@ -46,7 +46,7 @@ def clean_small_files(project_name, min_size_kb=1):
     if not os.path.exists(download_dir):
         return
 
-    min_size = min_size_kb * 1024  # 转换为字节
+    min_size = min_size_kb * 100  # 转换为字节
     removed_count = 0
 
     for filename in os.listdir(download_dir):
