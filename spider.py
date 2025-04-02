@@ -4,6 +4,10 @@ import jieba
 import hashlib
 import time
 import random
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+from nltk.tokenize import word_tokenize
 from fake_useragent import UserAgent
 from urllib.error import HTTPError
 from urllib.request import urlopen, Request
@@ -20,7 +24,8 @@ from requests.packages.urllib3.util.ssl_ import create_urllib3_context
 
 # Sets to keep track of queued and crawled URLs
 class Spider:
-    def __init__(self, project_name, base_url, domain_name, max_pages=100):
+    def __init__(self, project_name, base_url, domain_name, language = 'en', max_pages=100):
+        self.language = language
         self.max_pages = max_pages
         self.crawled_count = 0
         self.project_name = project_name
@@ -32,6 +37,26 @@ class Spider:
         self.crawled = set()
         self.boot()
         self.crawl_page('First spider', self.base_url)
+        self.stemmer = PorterStemmer()
+        self._check_nltk_resources()
+
+    def _check_nltk_resources(self):
+        try:
+            nltk.data.find('tokenizers/punkt')
+        except LookupError:
+            nltk.download('punkt', quiet=True)
+
+        try:
+            nltk.data.find('tokenizers/punkt_tab')
+        except LookupError:
+            nltk.download('punkt_tab', quiet=True)
+
+        # 同时确保停用词资源存在
+        try:
+            nltk.data.find('corpora/stopwords')
+        except LookupError:
+            nltk.download('stopwords', quiet=True)
+
 
     def _initialize_text_processor(self):
         # 初始化停用词表（需要用户自行准备）
@@ -45,8 +70,8 @@ class Spider:
             self.stopwords = {'的', '了', '在', '是', '我', '有', '和', '就', '不', '人'}
 
 
-    # 文本处理流水线
-    def _process_text(self, raw_text):
+    # 中文文本处理流水线
+    def _process_chinese_text(self, raw_text):
         # 清洗HTML标签
         clean_text = re.sub(r'<[^>]+>', '', raw_text)
         # 中文分词
@@ -60,6 +85,80 @@ class Spider:
         ]
         return ' '.join(filtered)
 
+    # 英文文本处理流水线
+    # def _process_english_text(self, raw_text):
+    #     # 清洗HTML标签
+    #     clean_text = re.sub(r'<[^>]+>', '', raw_text)
+    #
+    #     # 转换小写
+    #     text_lower = clean_text.lower()
+    #
+    #     # 移除特殊字符（保留字母、数字和空格）
+    #     text_clean = re.sub(r'[^a-zA-Z0-9\s]', '', text_lower)
+    #
+    #     # 分词
+    #     tokens = word_tokenize(text_clean)
+    #
+    #     # 去除停用词
+    #     filtered = [
+    #         word for word in tokens
+    #         if word not in self.stopwords and len(word) > 2
+    #     ]
+    #
+    #     # 词干提取
+    #     stemmed = [self.stemmer.stem(word) for word in filtered]
+    #
+    #     return ' '.join(stemmed)
+
+    def _process_english_text(self, raw_text):
+        # 加强版HTML清洗
+        clean_text = BeautifulSoup(raw_text, 'html.parser').get_text(' ', strip=True)
+
+        # 预处理特殊格式
+        text = clean_text.lower()
+        text = re.sub(r'\b(https?://|www\.)\S+\b', ' ', text)  # 移除URL
+        text = re.sub(r'@\w+', ' ', text)  # 移除@提及
+        text = re.sub(r'#\w+', ' ', text)  # 移除标签
+
+        # 处理技术术语粘连（驼峰命名转换）
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)  # CamelCase -> Camel Case
+        text = re.sub(r'(\d+)([a-zA-Z])', r'\1 \2', text)  # 数字字母分离
+        text = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', text)
+
+        # 保留必要标点（如连字符、撇号）
+        text = re.sub(r"[^a-zA-Z0-9'\-\.]", ' ', text)  # 保留基本字符
+
+        # 增强分词处理
+        try:
+            # 使用改进的分词策略
+            tokens = word_tokenize(text, language='english')
+        except:
+            # 备用分词方案
+            tokens = re.findall(r"[\w'-]+|[.!?]", text)
+
+        # 智能停用词过滤（保留否定形式）
+        filtered = [
+            word for word in tokens
+            if word.lower() not in self.stopwords
+               and len(word) > 1
+               and not word.isdigit()
+        ]
+
+        # 词干提取优化（保留常见名词）
+        common_nouns = {'data', 'analysis', 'system'}  # 自定义保留词表
+        stemmed = []
+        for word in filtered:
+            if word in common_nouns:
+                stemmed.append(word)
+            else:
+                stemmed.append(self.stemmer.stem(word))
+
+        # 后处理修正
+        processed = ' '.join(stemmed)
+        processed = re.sub(r"\s+['-]\s+", '', processed)  # 修复分离的撇号
+        processed = re.sub(r'\b(\w+)\s+-\s+(\w+)\b', r'\1-\2', processed)  # 恢复连字符单词
+        return processed
+
     def save_original_content(self, url, content):
         # 创建下载目录
         download_dir = os.path.join(self.project_name, 'downloads')
@@ -69,6 +168,7 @@ class Spider:
         # 生成唯一文件名
         filename = url.replace('https://', '').replace('http://', '')
         filename = re.sub(r'[\\/*?:"<>|&\u200b]', '_', filename)[:150] # 限制文件名长度
+        filename = re.sub(r'__', '_', filename)
         if not filename.endswith('.txt'):
             filename += '_org.txt'
 
@@ -86,10 +186,10 @@ class Spider:
         if not hasattr(self, 'stopwords'):
             self._initialize_text_processor()
 
-        # 写入文件 xxx_c.txt
+        # 写入文件 xxx_c.txt / xxx_e.txt
+        processed_filename = filename.replace('_org.txt', '_c.txt' if self.language == 'cn' else '_e.txt')
         try:
-            processed = self._process_text(content)
-            processed_filename = filename.replace('_org.txt', '_c.txt')
+            processed = self._process_chinese_text(content) if self.language == 'cn' else self._process_english_text(content)
             processed_path = os.path.join(download_dir, processed_filename)
 
             with open(processed_path, 'w', encoding='utf-8') as f:
@@ -139,48 +239,6 @@ class Spider:
                 self.queue.remove(page_url)
             self.update_files()
 
-    # 以下为博客园特定解析逻辑
-    def bky(self, soup, page_url, links):
-        # 提取文章正文
-        if '/p/' in page_url:  # 判断是否是文章页
-            article = {
-                'title': '',
-                'content': '',
-                'author': '',
-                'publish_time': ''
-            }
-
-            # 提取标题
-            title_tag = soup.find('a', {'id': 'cb_post_title_url'})
-            if title_tag:
-                article['title'] = title_tag.get_text().strip()
-
-            # 提取正文
-            content_div = soup.find('div', {'id': 'cnblogs_post_body'})
-            if content_div:
-                article['content'] = content_div.get_text().strip()
-
-            # 提取作者
-            author_span = soup.find('div', {'class': 'postdesc'}).find('a')
-            if author_span:
-                article['author'] = author_span.get_text().strip()
-
-            # 提取发布时间
-            time_span = soup.find('span', {'id': 'post-date'})
-            if time_span:
-                article['publish_time'] = time_span.get_text().strip()
-
-            # 保存结构化数据
-            self.save_structured_data(article, page_url)
-
-        # 处理分页逻辑
-        pagination = soup.find('div', {'class': 'pager'})
-        if pagination:
-            for link in pagination.find_all('a'):
-                href = link.get('href')
-                if href and 'javascript' not in href:
-                    full_url = parse.urljoin(self.base_url, href)
-                    links.add(full_url)
 
     # Saves queue data to project files
     def gather_links(self, page_url):

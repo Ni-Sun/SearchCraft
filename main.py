@@ -1,53 +1,12 @@
+import time
+import random
 import queue
 import threading
 from queue import Queue
 from spider import Spider
 from domain import *
 from general import *
-import time
-import random
-
-# 配置多个爬虫任务
-CRAWLER_CONFIGS = [
-    {
-        'name': 'cnblogs',
-        'homepage': 'https://www.cnblogs.com/',
-        'max_pages': 200,  # 控制爬取数量
-        'threads': 4,
-        'delay': (1, 3)  # 自定义延迟范围
-    },
-    {
-        'name': 'baidu',
-        'homepage': 'https://www.baidu.com',
-        'max_pages': 200,
-        'threads': 4
-    },
-    {
-        'name': 'weather_china',    # 中国天气网
-        'homepage': 'http://www.weather.com.cn',
-        'max_pages': 200,
-        'threads': 4
-    },
-    {
-        'name': 'lianjia',      # 链家
-        'homepage': 'https://www.lianjia.com',
-        'max_pages': 200,
-        'threads': 4
-    },
-    {
-        'name': 'bilibili',     # 哔哩哔哩
-        'homepage': 'https://www.bilibili.com',
-        'max_pages': 200,
-        'threads': 4
-    },
-    {
-        'name': 'sina_news',     # 新浪
-        'homepage': 'https://news.sina.com.cn',
-        'max_pages': 200,
-        'threads': 4
-    },
-]
-
+from configs import CRAWLER_CONFIGS
 
 class CrawlerMaster:
     def __init__(self, config):
@@ -58,7 +17,8 @@ class CrawlerMaster:
             self.project_name,
             config['homepage'],
             self.domain_name,
-            max_pages=config['max_pages']
+            max_pages=config['max_pages'],
+            language=config['language']
         )
         self.queue = Queue()
         self.threads = []
@@ -114,15 +74,30 @@ class CrawlerMaster:
             time.sleep(5)
 
     def refill_queue(self):
-        """从文件重新加载队列防止内存消耗过大"""
+        """智能队列补充机制"""
         current_queued = file_to_set(self.spider.queue_file)
 
-        # 添加自动补充初始URL的机制
-        if len(current_queued) == 0:
-            print("Queue empty, adding base URL to restart")
-            write_file(self.spider.queue_file, self.config['homepage'])
-            current_queued = {self.config['homepage']}
+        # 添加深度优先补充策略
+        if len(current_queued) < self.config['max_pages'] // 2:
+            print("智能补充种子URL")
+            seed_urls = [
+                self.config['homepage'] + '/hot',
+                self.config['homepage'] + '/explore',
+                self.config['homepage'] + '/roundtable'
+            ]
+            current_queued.update(seed_urls)
 
+        # 添加分页发现逻辑
+        if '/page=' in self.config['homepage']:
+            max_page = self.config.get('max_pages', 10)
+            current_page = len(current_queued)
+            new_urls = [f"{self.config['homepage']}?page={i}" for i in range(current_page, current_page + 5)]
+            current_queued.update(new_urls)
+
+        # 写入更新后的队列
+        set_to_file(current_queued, self.spider.queue_file)
+
+        # 加载到内存队列
         for url in current_queued:
             if not self.queue.full():
                 self.queue.put(url)
