@@ -32,15 +32,15 @@ requests-html - 用于执行JavaScript渲染
 
 运行main.py会生成crawler文件夹, 其下有多个xxx-crawler文件夹, 对应不同的网站
 
-<img src="D:\Pictures\Screenshots\2025-04-02_23-10-26.png" alt="Description" style="max-width: 80%; height: auto;">
+<img src="./img/2025-04-02_23-10-26.png" alt="Description" style="max-width: 80%; height: auto;">
 
 若爬取中文网站, 会生成xxx_org.txt 和 xxx_c.txt文件
 
-<img src="D:\Pictures\Screenshots\2025-04-02_23-10-48.png" alt="Description" style="max-width: 80%; height: auto;">
+<img src="./img/2025-04-02_23-10-48.png" alt="Description" style="max-width: 80%; height: auto;">
 
 若爬取英文网站, 会生成xxx_org.txt 和 xxx_e.txt文件
 
-<img src="D:\Pictures\Screenshots\2025-04-02_23-11-11.png" alt="Description" style="max-width: 80%; height: auto;">
+<img src="./img/2025-04-02_23-11-11.png" alt="Description" style="max-width: 80%; height: auto;">
 
 部分网页较好爬取,爬取失败率较低, 爬取速度较快; 部分网页不好爬取,爬取失败率较高, 爬取速度较慢(因此可能会存在 有acb_org.txt文件, 但是没有abc_c.txt文件 的情况)
 

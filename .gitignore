@@ -3,3 +3,4 @@ parsers/
 *crawler/
 .idea
 __pycache__
+!img/
