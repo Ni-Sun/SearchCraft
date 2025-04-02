@@ -85,31 +85,6 @@ class Spider:
         ]
         return ' '.join(filtered)
 
-    # 英文文本处理流水线
-    # def _process_english_text(self, raw_text):
-    #     # 清洗HTML标签
-    #     clean_text = re.sub(r'<[^>]+>', '', raw_text)
-    #
-    #     # 转换小写
-    #     text_lower = clean_text.lower()
-    #
-    #     # 移除特殊字符（保留字母、数字和空格）
-    #     text_clean = re.sub(r'[^a-zA-Z0-9\s]', '', text_lower)
-    #
-    #     # 分词
-    #     tokens = word_tokenize(text_clean)
-    #
-    #     # 去除停用词
-    #     filtered = [
-    #         word for word in tokens
-    #         if word not in self.stopwords and len(word) > 2
-    #     ]
-    #
-    #     # 词干提取
-    #     stemmed = [self.stemmer.stem(word) for word in filtered]
-    #
-    #     return ' '.join(stemmed)
-
     def _process_english_text(self, raw_text):
         # 加强版HTML清洗
         clean_text = BeautifulSoup(raw_text, 'html.parser').get_text(' ', strip=True)
@@ -430,6 +405,3 @@ class Spider:
     def update_files(self):
         set_to_file(self.queue, self.queue_file)
         set_to_file(self.crawled, self.crawled_file)
-        # download_dir = os.path.join(self.project_name, 'downloads')
-        # if os.path.exists(download_dir):
-        #     self.crawled_count = len(os.listdir(download_dir))
