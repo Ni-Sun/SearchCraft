@@ -3,6 +3,7 @@ import re
 import jieba
 import hashlib
 import time
+import certifi
 import random
 import nltk
 from nltk.corpus import stopwords
@@ -240,7 +241,7 @@ class Spider:
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
                 'Pragma': 'no-cache',
-                'Referer': 'https://www.cnblogs.com/',
+                'Referer': f'{urlparse(page_url).scheme}://{urlparse(page_url).netloc}/',  # 动态生成当前域名
                 'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
                 'Sec-Fetch-Site': 'same-origin',
@@ -288,7 +289,8 @@ class Spider:
                             headers=headers,
                             timeout=config['timeout'],
                             allow_redirects=True,
-                            proxies=proxies
+                            proxies=proxies,
+                            verify=certifi.where()  # 使用certifi的证书库
                         )
                         response.encoding = response.apparent_encoding
                         html_string = response.text
@@ -322,57 +324,6 @@ class Spider:
             # ================== 内容解析 ==================
             # 使用BeautifulSoup解析
             soup = BeautifulSoup(html_string, 'html.parser')
-
-            # 博客园特定解析
-            if 'www.cnblogs.com' in self.domain_name:
-                # 文章页解析
-                if '/p/' in page_url:
-                    article = {
-                        'title': '',
-                        'content': '',
-                        'author': '',
-                        'publish_time': '',
-                        'url': page_url,
-                        'crawl_time': datetime.now().isoformat()
-                    }
-
-                    # 标题提取
-                    title_tag = soup.find('a', {'id': 'cb_post_title_url'}) or soup.find('h1', {'class': 'postTitle'})
-                    if title_tag:
-                        article['title'] = title_tag.get_text().strip()
-
-                    # 正文提取
-                    content_div = soup.find('div', {'id': 'cnblogs_post_body'}) or soup.find('div', {'class': 'post'})
-                    if content_div:
-                        # 清理无关元素
-                        for elem in content_div.find_all(['script', 'style', 'footer']):
-                            elem.decompose()
-                        article['content'] = content_div.get_text().strip()
-
-                    # 作者信息
-                    author_div = soup.find('div', {'id': 'blog_post_info'})
-                    if author_div:
-                        author_link = author_div.find('a')
-                        if author_link:
-                            article['author'] = author_link.get_text().strip()
-
-                    # 发布时间
-                    time_span = soup.find('span', {'id': 'post-date'}) or soup.find('span', {'class': 'post-time'})
-                    if time_span:
-                        article['publish_time'] = time_span.get_text().strip()
-
-                    # 保存结构化数据
-                    if article['title']:  # 有效性检查
-                        self.save_structured_data(article, page_url)
-
-                # 分页处理
-                pagination = soup.find('div', {'class': 'pager'})
-                if pagination:
-                    for link in pagination.find_all('a'):
-                        href = link.get('href')
-                        if href and not href.startswith('javascript'):
-                            full_url = parse.urljoin(self.base_url, href)
-                            links.add(full_url)
 
             # 通用链接发现
             finder = LinkFinder(self.base_url, page_url)
