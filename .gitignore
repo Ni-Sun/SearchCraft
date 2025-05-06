@@ -1,8 +1,7 @@
-*/
-parsers/
-*crawler/
+venv
 .idea
 __pycache__
 
+processed
+spider/crawler
 
-!img/

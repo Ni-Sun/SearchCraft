@@ -1,4 +1,4 @@
-max_pages = 20  # 设置最大爬取页面数
+max_pages = 10  # 设置最大爬取页面数
 
 # 配置多个爬虫任务
 CRAWLER_CONFIGS = [

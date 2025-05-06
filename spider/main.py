@@ -7,6 +7,7 @@ from spider import Spider
 from domain import *
 from general import *
 from configs import CRAWLER_CONFIGS
+from gather import organize_translations
 
 class CrawlerMaster:
     def __init__(self, config):
@@ -125,6 +126,8 @@ if __name__ == '__main__':
             clean_small_files(project_name)
             print(f"Cleanup completed for {project_name}")
         print("=== All cleanup operations completed ===")
+
+        organize_translations()
 
 
 
