@@ -86,6 +86,7 @@ class Spider:
         ]
         return ' '.join(filtered)
 
+    # 英文文本处理流水线
     def _process_english_text(self, raw_text):
         # 加强版HTML清洗
         clean_text = BeautifulSoup(raw_text, 'html.parser').get_text(' ', strip=True)

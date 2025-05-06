@@ -24,12 +24,14 @@ class CrawlerMaster:
         self.threads = []
 
     def create_workers(self):
+        # 创建多个线程
         for _ in range(self.config['threads']):
             t = threading.Thread(target=self.worker, daemon=True)
             t.start()
             self.threads.append(t)
 
     def worker(self):
+        # 每个线程从队列中获取 URL
         while self.spider.crawled_count < self.spider.max_pages:
             try:
                 url = self.queue.get(timeout=10)
@@ -48,13 +50,11 @@ class CrawlerMaster:
                 print(f"{self.config['name']} worker error: {str(e)}")
                 self.queue.task_done()
 
+    # 创建并启动线程池
     def start(self):
-        # 初始化队列
-        self.load_queue()
-        # 创建工作线程
-        self.create_workers()
-        # 开始爬取
-        self.monitor()
+        self.load_queue()       # 初始化队列
+        self.create_workers()   # 创建工作线程
+        self.monitor()          # 监控爬虫状态
 
     def load_queue(self):
         queued = file_to_set(self.spider.queue_file)
@@ -73,8 +73,8 @@ class CrawlerMaster:
 
             time.sleep(5)
 
+    # 智能队列补充机制
     def refill_queue(self):
-        """智能队列补充机制"""
         current_queued = file_to_set(self.spider.queue_file)
 
         # 添加深度优先补充策略
