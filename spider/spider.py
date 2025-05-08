@@ -1,6 +1,6 @@
 import os
 import re
-import jieba
+# import jieba
 import hashlib
 import time
 import certifi
@@ -20,8 +20,8 @@ from bs4 import BeautifulSoup
 from urllib import parse
 import requests
 import requests.adapters
-from requests.packages.urllib3.util.ssl_ import create_urllib3_context
-
+from urllib3.util.ssl_ import create_urllib3_context
+from elasticsearch import Elasticsearch
 
 # Sets to keep track of queued and crawled URLs
 class Spider:
@@ -40,6 +40,13 @@ class Spider:
         self.crawl_page('First spider', self.base_url)
         self.stemmer = PorterStemmer()
         self._check_nltk_resources()
+        self.es_endpoint = "http://localhost:9200"
+        self.es = Elasticsearch(
+                [self.es_endpoint],
+                verify_certs=False,
+                ssl_show_warn=False
+            )
+        self._check_and_create_index()
 
     def _check_nltk_resources(self):
         try:
@@ -58,6 +65,48 @@ class Spider:
         except LookupError:
             nltk.download('stopwords', quiet=True)
 
+    def _check_and_create_index(self):
+        # 确保web_content索引存在
+        if not self.es.indices.exists(index="web_content"):
+            index_config = {
+                "mappings": {
+                    "properties": {
+                        "content": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {"type": "keyword", "ignore_above": 256}
+                            }
+                        },
+                        "language": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {"type": "keyword", "ignore_above": 256}
+                            }
+                        },
+                        "processed_content": {
+                            "type": "text",
+                            "analyzer": "ik_smart",
+                            "fields": {
+                                "keyword": {"type": "keyword", "ignore_above": 256}
+                            }
+                        },
+                        "timestamp": {"type": "date"},
+                        "url": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {"type": "keyword", "ignore_above": 256}
+                            }
+                        }
+                    }
+                },
+                "settings": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 1
+                }
+            }
+            self.es.indices.create(index="web_content", body=index_config)
+            print("已创建web_content索引")
+
 
     def _initialize_text_processor(self):
         # 初始化停用词表（需要用户自行准备）
@@ -70,21 +119,88 @@ class Spider:
             print("未找到停用词文件，使用默认停用词表")
             self.stopwords = {'的', '了', '在', '是', '我', '有', '和', '就', '不', '人'}
 
+    # 新增ES文档写入方法
+    def _index_to_es(self, url, processed_text, original_content):
+        document = {
+            "url": url,
+            "content": original_content,
+            "processed_content": processed_text,
+            "language": self.language,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        try:
+            response = self.es.index(
+                index="web_content",
+                document=document,
+                pipeline="ent-search-generic-ingestion"
+            )
+            if response['result'] not in ['created', 'updated']:
+                print(f"索引失败：{url}")
+        except Exception as e:
+            print(f"ES写入异常：{str(e)}")
+            # 失败重试逻辑
+            self._retry_failed_document(document)
+
+    def _retry_failed_document(self, document, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                self.es.index(
+                    index="web_content",
+                    document=document,
+                    timeout='30s'
+                )
+                return True
+            except:
+                time.sleep(2 ** attempt)
+        return False
+
+    # 对处理结果进行去重
+    def Deduplication(self, content):
+        s=set()
+        for i in content:
+            s.add(i)
+        content=list(s)
+        return
 
     # 中文文本处理流水线
     def _process_chinese_text(self, raw_text):
         # 清洗HTML标签
         clean_text = re.sub(r'<[^>]+>', '', raw_text)
-        # 中文分词
-        words = jieba.lcut(clean_text)
-        # 去除停用词和非中文字符
-        filtered = [
-            word.strip() for word in words
-            if word.strip() and
-               word not in self.stopwords and
-               re.match(r'[\u4e00-\u9fa5]', word)
-        ]
-        return ' '.join(filtered)
+
+        try:
+            # 通过ES的_analyze接口进行分词和停用词处理
+            response = requests.post(
+                f"{self.es_endpoint}/_analyze",
+                json={
+                    "analyzer": "ik_max_word",  # 使用IK分词器
+                    "text": clean_text
+                },
+                timeout=5,
+                headers={'Connection': 'close'},  # 明确关闭连接
+                verify=False  # 如果是本地测试可跳过证书验证
+            )
+
+            if response.status_code == 200:
+                # 提取分词结果并过滤
+                tokens = [token['token'] for token in response.json()['tokens']]
+                filtered = [
+                    word for word in tokens
+                    if word.strip() and
+                       word not in self.stopwords and
+                       re.match(r'[\u4e00-\u9fa5]', word)
+                ]
+                self.Deduplication(filtered)
+                return ' '.join(filtered)
+            else:
+                print(f"ES分词失败：{response.text}")
+                return ""
+
+        except Exception as e:
+            print(f"ES连接异常：{str(e)}")
+            # 降级方案：使用简易分词
+            return ' '.join(re.findall(r'[\u4e00-\u9fa5]+', clean_text))
+
 
     # 英文文本处理流水线
     def _process_english_text(self, raw_text):
@@ -134,6 +250,8 @@ class Spider:
         processed = ' '.join(stemmed)
         processed = re.sub(r"\s+['-]\s+", '', processed)  # 修复分离的撇号
         processed = re.sub(r'\b(\w+)\s+-\s+(\w+)\b', r'\1-\2', processed)  # 恢复连字符单词
+
+        self.Deduplication(processed)
         return processed
 
     def save_original_content(self, url, content):
@@ -157,6 +275,7 @@ class Spider:
             print(f'Saved: {filename}')
         except Exception as e:
             print(f'Save failed: {filename} - {str(e)}')
+            return  # 如果原始内容保存失败，终止后续操作
 
 
         # 初始化文本处理器
@@ -169,13 +288,16 @@ class Spider:
             processed = self._process_chinese_text(content) if self.language == 'cn' else self._process_english_text(content)
             processed_path = os.path.join(download_dir, processed_filename)
 
+            # 写入Elasticsearch
+            self._index_to_es(url, processed, content)
+
             with open(processed_path, 'w', encoding='utf-8') as f:
                 f.write(processed)
         except Exception as e:
             print(f'Save failed: {processed_filename} - {str(e)}')
 
+        # 统计≥1KB的文件数量
         if os.path.exists(download_dir):
-            # 统计≥1KB的文件数量
             self.crawled_count = sum(
                 1 for filename in os.listdir(download_dir)
                 if os.path.isfile(os.path.join(download_dir, filename))
