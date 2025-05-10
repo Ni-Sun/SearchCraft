@@ -11,7 +11,7 @@ from subprocess import Popen
 class SearchApp:
     def __init__(self, root):
         self.root = root
-        root.title("SearchCraft")
+        root.title("search_craft")
         root.geometry("800x600")
 
         # 创建界面组件
@@ -108,19 +108,12 @@ class SearchApp:
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        # 解析时间戳
-        def format_timestamp(ts):
-            try:
-                return datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M:%S")
-            except:
-                return "未知时间"
-
         # 插入新结果
         for idx, result in enumerate(data["results"], 1):
             self.tree.insert("", "end", values=(
                 result["url"],
                 result["language"].upper(),
-                format_timestamp(result["timestamp"])
+                result["timestamp"][:10]
             ))
 
         # 显示统计信息
@@ -129,7 +122,7 @@ class SearchApp:
 
 if __name__ == "__main__":
     flask_process = Popen([sys.executable, "app.py"])  # 启动Flask服务
-    time.sleep(3)
+    time.sleep(1)
     root = tk.Tk()
     app = SearchApp(root)
 

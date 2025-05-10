@@ -3,6 +3,7 @@ from elasticsearch import Elasticsearch
 from flask_cors import CORS
 import logging
 import elasticsearch
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -34,7 +35,6 @@ def not_found(e):
     return jsonify(error=str(e)), 404
 
 
-# 在app.py中添加
 @app.after_request
 def normalize_json_fields(response):
     """统一JSON字段名为小写"""
@@ -79,11 +79,11 @@ def search():
             }
         },
         "_source": ["url", "language", "timestamp"],  # 指定返回字段
-        "size": 10  # 限制返回结果数量
+        "size": 100  # 限制返回结果数量
     }
 
     try:
-        response = es.search(index="web_content", body=search_body)
+        response = es.search(index="search_craft", body=search_body)
         results = []
         for hit in response["hits"]["hits"]:
             source = hit.get("_source", {})
@@ -95,12 +95,7 @@ def search():
             language = str(source.get("language") or source.get("Language", "unknown")).lower()
 
             # 处理时间戳
-            timestamp = source.get("timestamp") or 0
-            if isinstance(timestamp, str):
-                try:
-                    timestamp = int(timestamp)
-                except:
-                    timestamp = 0
+            timestamp = source.get("timestamp")
 
             results.append({
                 "url": url,
