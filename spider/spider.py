@@ -129,6 +129,8 @@ class Spider:
 
     def _process_content(self, url, content):
         """处理并存储内容"""
+        content = BeautifulSoup(content, 'html.parser').get_text(' ', strip=True)
+
         # 保存原始内容
         self.file_manager.save_content(url, content, 'org')
 

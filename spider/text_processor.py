@@ -43,8 +43,6 @@ class TextProcessor:
 
     # 中文文本处理流水线
     def _process_chinese_text(self, raw_text):
-        # 清洗HTML标签
-        clean_text = re.sub(r'<[^>]+>', '', raw_text)
 
         try:
             # 通过ES的_analyze接口进行分词和停用词处理
@@ -52,7 +50,7 @@ class TextProcessor:
                 f"{self.es_endpoint}/_analyze",
                 json={
                     "analyzer": "ik_max_word",  # 使用IK分词器
-                    "text": clean_text
+                    "text": raw_text
                 },
                 timeout=5,
                 headers={'Connection': 'close'},  # 明确关闭连接
@@ -76,16 +74,14 @@ class TextProcessor:
         except Exception as e:
             print(f"ES连接异常：{str(e)}")
             # 降级方案：使用简易分词
-            return ' '.join(re.findall(r'[\u4e00-\u9fa5]+', clean_text))
+            return ' '.join(re.findall(r'[\u4e00-\u9fa5]+', raw_text))
 
 
     # 英文文本处理流水线
     def _process_english_text(self, raw_text):
-        # 加强版HTML清洗
-        clean_text = BeautifulSoup(raw_text, 'html.parser').get_text(' ', strip=True)
 
         # 预处理特殊格式
-        text = clean_text.lower()
+        text = raw_text.lower()
         text = re.sub(r'\b(https?://|www\.)\S+\b', ' ', text)  # 移除URL
         text = re.sub(r'@\w+', ' ', text)  # 移除@提及
         text = re.sub(r'#\w+', ' ', text)  # 移除标签
@@ -124,11 +120,12 @@ class TextProcessor:
                 stemmed.append(self.stemmer.stem(word))
 
         # 后处理修正
+        stemmed = self.deduplicate(stemmed)
         processed = ' '.join(stemmed)
         processed = re.sub(r"\s+['-]\s+", '', processed)  # 修复分离的撇号
         processed = re.sub(r'\b(\w+)\s+-\s+(\w+)\b', r'\1-\2', processed)  # 恢复连字符单词
 
-        return self.deduplicate(processed)
+        return processed
 
     def deduplicate(self,content):
         return list(set(content))
