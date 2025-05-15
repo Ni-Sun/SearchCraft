@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>文档相似度计算系统</title>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .file-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+        .similarity-score {
+            font-size: 24px;
+            color: #28a745;
+            margin: 10px 0;
+        }
+        .original-content {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        /* 添加新样式 */
+        .duplicate-check {
+            margin-top: 40px;
+            border-top: 2px solid #eee;
+            padding-top: 30px;
+        }
+        
+        .threshold-control {
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        #threshold {
+            width: 80px;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .duplicate-results table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .duplicate-results th,
+        .duplicate-results td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        
+        .duplicate-results th {
+            background: #f8f9fa;
+        }
+        
+        .duplicate-results tr:hover {
+            background: #f1f1f1;
+        }
+        
+        .compare-button {
+            padding: 5px 10px;
+            background: #17a2b8;
+            color: white;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>文档相似度计算</h1>
+        <div class="file-selector">
+            <div>
+                <label>文档1:</label>
+                <select id="file1Select"></select>
+            </div>
+            <div>
+                <label>文档2:</label>
+                <select id="file2Select"></select>
+            </div>
+        </div>
+        <button onclick="calculateSimilarity()">计算相似度</button>
+
+        <div class="result">
+            <h3>计算结果</h3>
+            <div class="similarity-score">
+                相似度: <span id="similarityValue">0</span>
+            </div>
+
+            <h4>文档1原文</h4>
+            <pre class="original-content" id="original1Content"></pre>
+
+            <h4>文档2原文</h4>
+            <pre class="original-content" id="original2Content"></pre>
+        </div>
+
+        <!-- 新增文档查重系统 -->
+        <div class="duplicate-check">
+            <h2>文档查重系统</h2>
+            
+            <!-- 阈值设置 -->
+            <div class="threshold-control">
+                <label>相似度阈值: 
+                    <input type="number" id="threshold" min="0" max="1" step="0.05" value="0.8">
+                </label>
+                <button onclick="findAllDuplicates()">全局查重</button>
+            </div>
+            
+            <!-- 结果展示 -->
+            <div class="duplicate-results">
+                <h3>重复文档列表</h3>
+                <table id="duplicateTable">
+                    <thead>
+                        <tr>
+                            <th>文档1</th>
+                            <th>文档2</th>
+                            <th>相似度</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 新增HTML转义函数
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, (m) => map[m]);
+        }
+
+        // 新增长文件名格式化函数
+        function formatLongFilename(name) {
+            const escapedName = escapeHtml(name);
+            const maxLength = 60;
+            let formatted = '';
+            let remaining = escapedName;
+            
+            while (remaining.length > 0) {
+                formatted += remaining.substring(0, maxLength) + '<br>';
+                remaining = remaining.substring(maxLength);
+            }
+            return formatted.replace(/<br>$/, ''); // 移除末尾多余的换行
+        }
+
+        // 初始化加载文件列表
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/files');
+                const files = await response.json();
+
+                const populateSelect = (selectElement) => {
+                    files.forEach(file => {
+                        const option = document.createElement('option');
+                        // option.value = file.processed_path;
+                        option.value = JSON.stringify({
+                            processed_path: file.processed_path,
+                            original_path: file.original_path,
+                            lang: file.lang,
+                            name: file.name
+                        });
+                        option.textContent = `${file.name} (${file.lang.toUpperCase()})`;
+                        selectElement.appendChild(option);
+                    });
+                }
+
+                populateSelect(document.getElementById('file1Select'));
+                populateSelect(document.getElementById('file2Select'));
+
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+                alert('文件列表加载失败');
+            }
+        });
+
+        // 计算相似度函数
+        async function calculateSimilarity() {
+            const file1 = JSON.parse(document.getElementById('file1Select').value);
+            const file2 = JSON.parse(document.getElementById('file2Select').value);
+
+            if (!file1 || !file2) {
+                alert('请选择两个文档');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        file1: file1,
+                        file2: file2
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '计算失败');
+                }
+
+                const result = await response.json();
+
+                // 更新界面
+                document.getElementById('similarityValue').textContent =
+                    result.similarity.toFixed(4);
+                document.getElementById('original1Content').textContent =
+                    result.content1 || '内容不可用';
+                document.getElementById('original2Content').textContent =
+                    result.content2 || '内容不可用';
+
+            } catch (error) {
+                console.error('计算错误:', error);
+                alert(`计算失败: ${error.message}`);
+            }
+        }
+        
+        // 新增全局查重功能
+        async function findAllDuplicates() {
+            const threshold = document.getElementById('threshold').value;
+            
+            try {
+                const response = await fetch(`/api/duplicates?threshold=${threshold}`);
+                const duplicates = await response.json();
+                
+                const tbody = document.querySelector('#duplicateTable tbody');
+                tbody.innerHTML = '';  // 清空现有内容
+                
+                duplicates.forEach(pair => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${formatLongFilename(pair.doc1)}</td>
+                        <td>${formatLongFilename(pair.doc2)}</td>
+                        <td>${pair.similarity.toFixed(4)}</td>
+                        <td>
+                            <button class="compare-button" 
+                                onclick="comparePair('${pair.doc1.replace(/'/g, "\\'")}', '${pair.doc2.replace(/'/g, "\\'")}')">
+                                对比详情
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('查重失败:', error);
+                alert('获取重复文档失败');
+            }
+        }
+        
+        // 对比详情功能
+        async function comparePair(doc1Name, doc2Name) {
+            // 在现有文件列表中找到对应文档
+            const options = document.getElementById('file1Select').options;
+            let doc1, doc2;
+            
+            for (let opt of options) {
+                const file = JSON.parse(opt.value);
+                if (file.name === doc1Name) doc1 = file;
+                if (file.name === doc2Name) doc2 = file;
+                if (doc1 && doc2) break;
+            }
+            
+            if (!doc1 || !doc2) {
+                alert('找不到对应文档');
+                return;
+            }
+            
+            // 设置选择框并触发计算
+            document.getElementById('file1Select').value = JSON.stringify(doc1);
+            document.getElementById('file2Select').value = JSON.stringify(doc2);
+            await calculateSimilarity();
+            
+            // 滚动到结果区域
+            document.querySelector('.result').scrollIntoView({
+                behavior: 'smooth'
+            });
+        }
+    </script>
+</body>
+</html>
