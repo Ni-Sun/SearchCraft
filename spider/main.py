@@ -7,12 +7,12 @@ from spider import Spider
 from domain import *
 from general import *
 from configs import CRAWLER_CONFIGS
-from gather import organize_translations
+# from gather import organize_translations
 
 class CrawlerMaster:
     def __init__(self, config):
         self.config = config
-        self.project_name = f"crawler/{config['name']}-crawler"
+        self.project_name = f"crawler/{'zh' if config['language']=='cn' else 'en'}/{config['name']}-crawler"
         self.domain_name = get_domain_name(config['homepage'])
         self.spider = Spider(
             self.project_name,
@@ -127,7 +127,7 @@ if __name__ == '__main__':
             print(f"Cleanup completed for {project_name}")
         print("=== All cleanup operations completed ===")
 
-        organize_translations()
+        # organize_translations()
 
 
 
