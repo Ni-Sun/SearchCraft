@@ -2,16 +2,29 @@ import os
 import numpy as np
 from flask_cors import CORS
 from collections import defaultdict
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, send_from_directory
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.exceptions import NotFittedError
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.preprocessing import Normalizer
 from sklearn.metrics import silhouette_score
+from elasticsearch import Elasticsearch
+# from search.app import search
+# import logging
+import elasticsearch
+import json
 
 app = Flask(__name__)
 CORS(app)
+
+# 初始化Elasticsearch连接
+es = Elasticsearch(
+    hosts=["http://localhost:9200"],
+    request_timeout=30,
+    max_retries=3,
+    retry_on_timeout=True
+)
 
 class DocumentStore:
     def __init__(self):
@@ -353,6 +366,74 @@ def handle_clustering():
     
     except Exception as e:
         return jsonify({"error": f"聚类失败: {str(e)}"}), 500
+
+# @app.route('/search')
+# def search_page():
+#     """搜索功能前端页面"""
+#     return send_from_directory('static', 'search.html')
+
+@app.route('/api/search', methods=['GET'])
+def handle_search():
+    """执行搜索功能"""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({"error": "Empty query"}), 400
+
+    search_body = {
+        "query": {
+            "match": {
+                "processed_content": {
+                    "query": query,
+                }
+            }
+        },
+        "_source": ["url", "language", "timestamp"],
+        "size": 100
+    }
+
+    try:
+        response = es.search(index="search_craft", body=search_body)
+        results = []
+        for hit in response["hits"]["hits"]:
+            source = hit.get("_source", {})
+            results.append({
+                "url": source.get("url", "未知URL"),
+                "language": str(source.get("language", "unknown")).lower(),
+                "timestamp": source.get("timestamp")
+            })
+
+        return jsonify({
+            "total": response["hits"]["total"]["value"],
+            "results": results
+        })
+
+    except elasticsearch.NotFoundError:
+        return jsonify({"error": "索引不存在"}), 404
+    except Exception as e:
+        app.logger.error(f"ES查询失败: {str(e)}", exc_info=True)
+        return jsonify({"error": "搜索服务暂时不可用"}), 500
+
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify(error=str(e)), 404
+
+@app.after_request
+def normalize_json_fields(response):
+    """统一JSON字段名为小写"""
+    if response.is_json:
+        data = response.get_json()
+        def normalize_keys(obj):
+            if isinstance(obj, dict):
+                return {k.lower(): normalize_keys(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [normalize_keys(item) for item in obj]
+            return obj
+        response.data = json.dumps(normalize_keys(data))
+    return response
 
 if __name__ == '__main__':
     initialize_data()
