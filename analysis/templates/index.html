@@ -103,10 +103,111 @@
             border-radius: 3px;
             cursor: pointer;
         }
+        
+        /* 新增聚类相关样式 */
+        .clustering-section {
+            margin: 40px 0;
+            border-top: 2px solid #eee;
+            padding-top: 30px;
+        }
+
+        .cluster-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .k-selector {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .cluster-results {
+            display: grid;
+            gap: 20px;
+        }
+
+        .k-group {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .cluster-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .silhouette-score {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .cluster-card {
+            margin: 1rem 0;
+            padding: 1rem;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+
+        .cluster-id {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .cluster-size {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .representative-docs {
+            list-style: none;
+            padding: 0;
+            margin: 0.5rem 0 0 0;
+        }
+
+        .doc-item {
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .doc-item:hover {
+            background-color: #e9ecef;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- 在原有内容之前添加聚类模块 -->
+        <div class="clustering-section">
+            <h1>文档聚类分析</h1>
+            
+            <div class="cluster-controls">
+                <select class="k-selector" id="kSelector" multiple>
+                    <option value="5">5 类</option>
+                    <option value="10">10 类</option>
+                    <option value="20" selected>20 类</option>
+                    <option value="25">25 类</option>
+                    <option value="50">50 类</option>
+                </select>
+                <button onclick="loadClusters()">加载聚类结果</button>
+            </div>
+
+            <div class="cluster-results" id="clusterResults"></div>
+        </div>
+
         <h1>文档相似度计算</h1>
         <div class="file-selector">
             <div>
@@ -135,7 +236,7 @@
 
         <!-- 新增文档查重系统 -->
         <div class="duplicate-check">
-            <h2>文档查重系统</h2>
+            <h1>文档查重系统</h1>
             
             <!-- 阈值设置 -->
             <div class="threshold-control">
@@ -213,6 +314,9 @@
 
                 populateSelect(document.getElementById('file1Select'));
                 populateSelect(document.getElementById('file2Select'));
+
+                // 自动加载默认聚类结果
+                loadClusters();
 
             } catch (error) {
                 console.error('加载文件列表失败:', error);
@@ -323,6 +427,83 @@
             document.querySelector('.result').scrollIntoView({
                 behavior: 'smooth'
             });
+        }
+
+        // 新增聚类相关功能
+        async function loadClusters() {
+            const kValues = Array.from(document.getElementById('kSelector').selectedOptions)
+                                .map(opt => parseInt(opt.value));
+            
+            try {
+                const response = await fetch(`/api/cluster?n_clusters=${kValues.join(',')}`);
+                const results = await response.json();
+                
+                renderClusterResults(results);
+            } catch (error) {
+                console.error('加载聚类结果失败:', error);
+                alert('聚类结果加载失败');
+            }
+        }
+
+        function renderClusterResults(data) {
+            const container = document.getElementById('clusterResults');
+            container.innerHTML = '';
+
+            // 遍历所有K值
+            Object.entries(data).forEach(([k, clusterData]) => {
+                // 确保数据有效性
+                if (!clusterData.top_clusters) return;
+
+                const kGroup = document.createElement('div');
+                kGroup.className = 'k-group';
+                
+                kGroup.innerHTML = `
+                    <div class="cluster-header">
+                        <h3>K=${k} 聚类结果</h3>
+                        ${clusterData.silhouette >= 0 ? `
+                        <div class="silhouette-score">
+                            轮廓系数: ${clusterData.silhouette.toFixed(3)}
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                clusterData.top_clusters.forEach(cluster => {
+                    const clusterCard = document.createElement('div');
+                    clusterCard.className = 'cluster-card';
+                    
+                    clusterCard.innerHTML = `
+                        <div class="cluster-header">
+                            <div>
+                                <span class="cluster-id">类目 ${cluster.id}</span>
+                                <span class="cluster-size">（包含 ${cluster.size} 个文档）</span>
+                            </div>
+                        </div>
+                        <ul class="representative-docs">
+                            ${cluster.representatives.map(doc => `
+                                <li class="doc-item" 
+                                    data-name="${doc.name}"
+                                    data-lang="${doc.lang}"
+                                    onclick="findDocument('${doc.name}')">
+                                    ${doc.name} (${doc.lang.toUpperCase()}) 
+                                    ${doc.similarity ? `<span style="color: #666;">相似度: ${doc.similarity.toFixed(3)}</span>` : ''}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    `;
+
+                    kGroup.appendChild(clusterCard);
+                });
+
+                container.appendChild(kGroup);
+            });
+        }
+
+        // 文档查找功能
+        function findDocument(name) {
+            // 这里可以添加查找文档的具体实现
+            console.log('查找文档:', name);
+            // 可以触发其他操作，比如显示文档详情等
         }
     </script>
 </body>

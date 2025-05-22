@@ -6,6 +6,9 @@ from flask import Flask, jsonify, request, render_template
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.exceptions import NotFittedError
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.preprocessing import Normalizer
+from sklearn.metrics import silhouette_score
 
 app = Flask(__name__)
 CORS(app)
@@ -16,6 +19,7 @@ class DocumentStore:
         self.vectorizer = TfidfVectorizer(tokenizer=lambda x: x.split(), lowercase=False)
         self.tfidf_matrix = None
         self._is_fitted = False
+        self.cluster_cache = {}  # 缓存不同参数的聚类结果
 
     def load_documents(self, files):
         """预加载所有文档并计算TF-IDF矩阵"""
@@ -50,6 +54,78 @@ class DocumentStore:
         vec2 = self.tfidf_matrix[idx2]
         return cosine_similarity(vec1, vec2)[0][0]
 
+    def cluster_documents(self, n_clusters=20):
+        """执行文档聚类并缓存结果"""
+        try:
+            if n_clusters <= 0:
+                raise ValueError("聚类数量必须大于0")
+
+            cache_key = f"kmeans_{n_clusters}"
+            if cache_key in self.cluster_cache:
+                return self.cluster_cache[cache_key]
+
+            if not self._is_fitted or self.tfidf_matrix is None:
+                raise NotFittedError("请先成功加载文档数据")
+
+            # 增加数据校验
+            if self.tfidf_matrix.shape[0] < n_clusters:
+                raise ValueError(f"文档数量({self.tfidf_matrix.shape[0]})不能小于聚类数({n_clusters})")
+
+            # 增加进度日志
+            print(f"[Clustering] 开始处理 {self.tfidf_matrix.shape[0]} 个文档，聚类数={n_clusters}")
+
+            # 数据归一化处理
+            normalizer = Normalizer(norm='l2')
+            normalized_vectors = normalizer.fit_transform(self.tfidf_matrix)
+
+            # 使用MiniBatchKMeans提高大数据集处理效率
+            kmeans = MiniBatchKMeans(
+                n_clusters=n_clusters,
+                random_state=42,
+                n_init=5,
+                batch_size=1000,
+                max_iter=100
+            )
+            
+            cluster_labels = kmeans.fit_predict(normalized_vectors)
+            
+            # 计算每个文档到所属簇中心的距离
+            distances = kmeans.transform(normalized_vectors)
+            
+            # 组织聚类结果
+            clusters = defaultdict(list)
+            for idx, (label, distance) in enumerate(zip(cluster_labels, distances)):
+                clusters[int(label)].append({
+                    "doc_idx": idx,
+                    "distance": distance[label]
+                })
+            
+            # 对每个簇按距离排序并保留前5个
+            processed_clusters = {}
+            for label, docs in clusters.items():
+                sorted_docs = sorted(docs, key=lambda x: x["distance"])[:5]
+                processed_clusters[label] = {
+                    "size": len(docs),
+                    "representatives": [d["doc_idx"] for d in sorted_docs]
+                }
+            
+            # 按簇大小排序
+            sorted_clusters = sorted(
+                processed_clusters.items(),
+                key=lambda x: -x[1]["size"]
+            )
+            
+            # 缓存结果
+            self.cluster_cache[cache_key] = {
+                "clusters": sorted_clusters,
+                "model": kmeans
+            }
+            
+            return self.cluster_cache[cache_key]
+            
+        except Exception as e:
+            print(f"[Clustering Error] 聚类失败: {str(e)}")
+            raise
 
 # 初始化文档存储
 doc_store = DocumentStore()
@@ -119,7 +195,7 @@ def find_similar_documents(doc_index):
 
 def get_files():
     """获取所有预处理文件信息"""
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../spider/crawler'))
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../crawler'))
     files = []
 
     for lang in ['zh', 'en']:
@@ -214,6 +290,69 @@ def api_calculate():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def calculate_silhouette_score(X, model):
+    """计算轮廓系数"""
+    try:
+        return silhouette_score(X, model.labels_, metric='cosine')
+    except:
+        return -1  # 当只有一个簇时返回-1
+
+@app.route('/api/cluster', methods=['GET'])
+def handle_clustering():
+    try:
+        n_clusters_list = list(map(int, request.args.get('n_clusters', '20').split(',')))
+        lang_filter = request.args.get('lang', None)
+        
+        results = {}
+        for n_clusters in n_clusters_list:
+            if n_clusters <= 0:
+                continue
+                
+            try:
+                cluster_result = doc_store.cluster_documents(n_clusters)
+                
+                # 重构过滤逻辑
+                doc_indices = [
+                    idx for idx, doc in enumerate(doc_store.documents)
+                    if lang_filter in [None, doc['lang']]
+                ]
+                
+                if not doc_indices:
+                    continue
+
+                # 修正聚类结果处理
+                clusters = []
+                for cluster_id, cluster_info in cluster_result["clusters"]:  # 移除[:3]限制
+                    cluster_docs = [
+                        idx for idx in cluster_info["representatives"]
+                        if idx in doc_indices
+                    ][:5]  # 安全截断
+                    
+                    clusters.append({
+                        "id": cluster_id,
+                        "size": cluster_info["size"],
+                        "representatives": [{
+                            "name": doc_store.documents[idx]["name"],
+                            "lang": doc_store.documents[idx]["lang"],
+                        } for idx in cluster_docs]
+                    })
+                
+                results[str(n_clusters)] = {
+                    "top_clusters": sorted(clusters, key=lambda x: -x["size"]),
+                    "silhouette": calculate_silhouette_score(doc_store.tfidf_matrix, cluster_result["model"])
+                }
+
+            except Exception as e:
+                print(f"处理聚类数 {n_clusters} 时出错: {str(e)}")
+                continue
+        
+        if not results:
+            return jsonify({"error": "没有成功完成任何聚类"}), 400
+            
+        return jsonify(results)
+    
+    except Exception as e:
+        return jsonify({"error": f"聚类失败: {str(e)}"}), 500
 
 if __name__ == '__main__':
     initialize_data()
