@@ -233,11 +233,12 @@ def get_files():
             for filename in os.listdir(processed_dir):
                 if (filename.endswith('_e.txt') and lang == 'en') or (filename.endswith('_c.txt') and lang == 'zh'):
                     processed_path = os.path.join(processed_dir, filename)
-                    original_path = os.path.join(original_dir, filename[:-6]+'_org.txt')    # 将 _e/_c 转为 _org
+                    original_filename = filename[:-6] + '_org.txt'
+                    original_path = os.path.join(original_dir, original_filename)
 
                     if os.path.isfile(original_path):
                         files.append({
-                            'name': filename,
+                            'name': original_filename,  # 关键修改：使用原始文件名
                             'lang': lang,
                             'processed_path': processed_path,
                             'original_path': original_path
