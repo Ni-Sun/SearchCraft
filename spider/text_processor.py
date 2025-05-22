@@ -1,3 +1,4 @@
+import os
 import re
 import nltk
 import requests
@@ -30,7 +31,11 @@ class TextProcessor:
 
     def _load_stopwords(self):
         try:
-            with open('stopwords.txt', 'r', encoding='utf-8') as f:
+            # 获取当前脚本所在目录
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            stopwords_path = os.path.join(script_dir, 'stopwords.txt')
+
+            with open(stopwords_path, 'r', encoding='utf-8') as f:
                 return set(line.strip() for line in f)
         except FileNotFoundError:
             return set(stopwords.words(self.language))
