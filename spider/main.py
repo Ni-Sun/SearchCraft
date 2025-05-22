@@ -3,16 +3,18 @@ import random
 import queue
 import threading
 from queue import Queue
+from pathlib import Path
 from spider import Spider
 from domain import *
 from general import *
 from configs import CRAWLER_CONFIGS
+from file_manager import FileManager
 # from gather import organize_translations
 
 class CrawlerMaster:
     def __init__(self, config):
         self.config = config
-        self.project_name = f"crawler/{'zh' if config['language']=='cn' else 'en'}/{config['name']}-crawler"
+        self.project_name = f"../crawler/{'zh' if config['language']=='cn' else 'en'}/{config['name']}-crawler"
         self.domain_name = get_domain_name(config['homepage'])
         self.spider = Spider(
             self.project_name,
@@ -118,18 +120,15 @@ if __name__ == '__main__':
             print("\n=== Current Status ===")
             for m in masters:
                 print(f"{m.config['name']}: {m.spider.crawled_count} pages")
+                
     finally:
         # 所有任务完成后执行清理
-        print("\n=== Starting cleanup ===")
+        print("=== Starting cleanup ===")
         for config in CRAWLER_CONFIGS:
-            project_name = f"crawler/{config['name']}-crawler"
-            clean_small_files(project_name)
-            print(f"Cleanup completed for {project_name}")
+            project_name = Path(__file__).parent.parent / 'crawler' / f"{'zh' if config['language']=='cn' else 'en'}" / f"{config['name']}-crawler"
+            file_manager = FileManager(project_name)
+            file_manager.clean_small_files(1)
         print("=== All cleanup operations completed ===")
-
-        # organize_translations()
-
-
 
 
 
