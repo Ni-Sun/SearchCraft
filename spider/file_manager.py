@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 
 
 class FileManager:
@@ -60,3 +61,32 @@ class FileManager:
             print(f'Error counting files: {str(e)}')
             return 0
         return count
+    
+
+    # 清理小文件
+    def clean_small_files(self, min_size_kb=1):
+        """
+        清理指定项目downloads目录中original和processed子文件夹的小文件
+        :param min_size_kb: 最小文件大小（KB）
+        """
+        base_dir = Path(self.project_name).resolve()  # 自动解析为绝对路径
+        download_dir = base_dir / 'downloads'
+        
+        # 遍历时使用pathlib处理路径
+        for subdir in ['original', 'processed']:
+            subdir_path = download_dir / subdir
+            if not subdir_path.exists():
+                print(f'Subdirectory not found: {subdir_path}')
+                continue
+                
+            for file_path in subdir_path.glob('*.txt'):  # 直接匹配txt文件
+                if file_path.is_file():
+                    file_size = file_path.stat().st_size
+                    if file_size < min_size_kb * 1024:
+                        try:
+                            file_path.unlink()
+                            print(f'Removed: {file_path.relative_to(base_dir)}')
+                        except Exception as e:
+                            print(f'Failed to remove {file_path}: {e}')
+
+
