@@ -115,7 +115,11 @@ class Spider:
                     headers=self._generate_headers(page_url),
                     timeout=20,
                     allow_redirects=True,
-                    verify=certifi.where()
+                    verify=certifi.where(),
+                    proxies={
+                        'http': None,
+                        'https': None
+                    }
                 )
                 response.encoding = response.apparent_encoding
                 return response.text
