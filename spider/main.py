@@ -14,7 +14,9 @@ from file_manager import FileManager
 class CrawlerMaster:
     def __init__(self, config):
         self.config = config
-        self.project_name = f"../crawler/{'zh' if config['language']=='cn' else 'en'}/{config['name']}-crawler"
+        project_root = Path(__file__).parent.parent
+        project_name = project_root / 'crawler' / ('zh' if config['language']=='cn' else 'en') / f"{config['name']}-crawler"
+        self.project_name = str(project_name)
         self.domain_name = get_domain_name(config['homepage'])
         self.spider = Spider(
             self.project_name,
