@@ -107,6 +107,7 @@ pandas==1.3.3
 
 ## 目录结构
 
+```text
 SearchCraft/
 ├── analysis/                 # 文档分析模块
 │   ├──templates
@@ -141,6 +142,7 @@ SearchCraft/
 ├── venv/                   # Python虚拟环境
 ├── README.md              # 项目说明文档
 └── .gitignore             # Git忽略文件
+```
 
 ## 配置
 
