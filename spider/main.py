@@ -9,7 +9,6 @@ from domain import *
 from general import *
 from configs import CRAWLER_CONFIGS
 from file_manager import FileManager
-# from gather import organize_translations
 
 class CrawlerMaster:
     def __init__(self, config):
