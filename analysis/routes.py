@@ -52,7 +52,10 @@ def init_routes(app):
         top_n = request.args.get('top', default=5, type=int)
 
         try:
-            similarities = cosine_similarity(DocumentStore.tfidf_matrix[doc_index], DocumentStore.tfidf_matrix)
+            similarities = cosine_similarity(
+                current_app.document_store.tfidf_matrix[doc_index], 
+                current_app.document_store.tfidf_matrix
+            )
         except IndexError:
             return jsonify({'error': 'Invalid document index'}), 400
 
@@ -68,9 +71,9 @@ def init_routes(app):
             if score < threshold:
                 break
             results.append({
-                'document': DocumentStore.documents[idx]['name'],
+                'document': current_app.document_store.documents[idx]['name'],
                 'similarity': float(score),
-                'lang': DocumentStore.documents[idx]['lang']
+                'lang': current_app.document_store.documents[idx]['lang']
             })
             if len(results) >= top_n:
                 break
@@ -144,11 +147,11 @@ def init_routes(app):
                     continue
                     
                 try:
-                    cluster_result = DocumentStore.cluster_documents(n_clusters)
+                    cluster_result = current_app.document_store.cluster_documents(n_clusters)
                     
                     # 重构过滤逻辑
                     doc_indices = [
-                        idx for idx, doc in enumerate(DocumentStore.documents)
+                        idx for idx, doc in enumerate(current_app.document_store.documents)
                         if lang_filter in [None, doc['lang']]
                     ]
                     
@@ -157,24 +160,24 @@ def init_routes(app):
 
                     # 修正聚类结果处理
                     clusters = []
-                    for cluster_id, cluster_info in cluster_result["clusters"]:  # 移除[:3]限制
+                    for cluster_id, cluster_info in cluster_result["clusters"]:
                         cluster_docs = [
                             idx for idx in cluster_info["representatives"]
                             if idx in doc_indices
-                        ][:5]  # 安全截断
+                        ][:5]
                         
                         clusters.append({
                             "id": cluster_id,
                             "size": cluster_info["size"],
                             "representatives": [{
-                                "name": DocumentStore.documents[idx]["name"],
-                                "lang": DocumentStore.documents[idx]["lang"],
+                                "name": current_app.document_store.documents[idx]["name"],
+                                "lang": current_app.document_store.documents[idx]["lang"],
                             } for idx in cluster_docs]
                         })
                     
                     results[str(n_clusters)] = {
                         "top_clusters": sorted(clusters, key=lambda x: -x["size"]),
-                        "silhouette": calculate_silhouette_score(DocumentStore.tfidf_matrix, cluster_result["model"])
+                        "silhouette": calculate_silhouette_score(current_app.document_store.tfidf_matrix, cluster_result["model"])
                     }
 
                 except Exception as e:
