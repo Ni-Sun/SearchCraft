@@ -112,7 +112,11 @@ SearchCraft/
 ├── analysis/                 # 文档分析模块
 │   ├──templates
 │   │   └──index.html	# 前端界面
-│   └── app.py		# 搜索功能, 相似度计算和聚类分析
+│   ├── app.py              # Flask应用主入口
+│   ├── routes.py           # 路由处理
+│   ├── search_service.py   # 搜索服务实现
+│   ├── document_store.py   # 文档存储和管理
+│   └── utils.py            # 工具函数
 │
 ├── spider/                  # 爬虫模块
 │   ├── spider.py           # 爬虫核心逻辑
